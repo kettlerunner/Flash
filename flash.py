@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import scrolledtext, messagebox
 import subprocess
 import threading
 import glob
 import os
 
-# Paths and settings
-BIN = '/home/pi/FR1_FACTORY.bin'       # Firmware binary
+# Firmware and settings
+BIN = '/home/pi/FR1_FACTORY.bin'
 BAUD = '1152000'
 COUNT_FILE = '/home/pi/flash_count.txt'
 SUCCESS_WAV = '/home/pi/success.wav'
@@ -21,57 +21,53 @@ def detect_port():
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        # Remove window decorations and force fullscreen
-        root.withdraw()  # Hide window while configuring
+        # Borderless fullscreen and hide cursor
+        root.withdraw()
         root.overrideredirect(True)
-        root.attributes('-fullscreen', True)
-        root.attributes('-topmost', True)
-
-        # Get screen size
-        root.update_idletasks()
-        screen_w = root.winfo_screenwidth()
-        screen_h = root.winfo_screenheight()
-        root.geometry(f"{screen_w}x{screen_h}+0+0")
+        root.attributes('-fullscreen', True, '-topmost', True)
         root.config(cursor='none')
-        root.deiconify()  # Show window now that it's fullscreen
+        root.update_idletasks()
+        # Geometry ensures full coverage
+        width = root.winfo_screenwidth()
+        height = root.winfo_screenheight()
+        root.geometry(f"{width}x{height}+0+0")
+        root.deiconify()
 
-        # Dynamic font sizes
-        btn_size = int(screen_h * 0.2)
-        status_size = int(screen_h * 0.05)
-        count_size = int(screen_h * 0.04)
+        # UI frames
+        btn_frame = tk.Frame(root, bg='#333')
+        btn_frame.pack(fill='x', pady=5)
 
-        # UI variables
-        self.status_text = tk.StringVar(value='Ready to flash.')
-        self.flash_count = self.load_count()
-        self.count_text = tk.StringVar(value=f'Flashes Completed: {self.flash_count}')
-
-        # FLASH button
+        # Buttons
         self.flash_button = tk.Button(
-            root, text='FLASH', font=('Arial', btn_size),
-            bg='green', fg='white', command=self.start_flash
+            btn_frame, text='Flash', font=('Arial', 20), bg='green', fg='white',
+            width=10, command=self.start_flash
         )
-        self.flash_button.pack(expand=True, fill='both', padx=10, pady=10)
+        self.flash_button.pack(side='left', padx=10)
 
-        # Status label
-        self.status_label = tk.Label(
-            root, textvariable=self.status_text,
-            font=('Arial', status_size)
+        self.reset_button = tk.Button(
+            btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
+            width=10, command=self.reset_ui
         )
-        self.status_label.pack()
+        self.reset_button.pack(side='left', padx=10)
 
-        # Counter label
-        self.counter_label = tk.Label(
-            root, textvariable=self.count_text,
-            font=('Arial', count_size)
+        self.close_button = tk.Button(
+            btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
+            width=10, command=root.quit
         )
-        self.counter_label.pack(pady=(0,20))
+        self.close_button.pack(side='right', padx=10)
 
-        # Detect port
+        # Status log area
+        self.log_area = scrolledtext.ScrolledText(
+            root, state='disabled', font=('Courier', 14), bg='#111', fg='#0f0', wrap='word'
+        )
+        self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
+
+        # Initialize
+        self.flash_count = self.load_count()
         self.PORT = detect_port()
         if not self.PORT:
-            messagebox.showerror('Error', 'No ESP32 port found!')
-            self.flash_button.config(state=tk.DISABLED)
-            self.status_text.set('No ESP32 detected.')
+            self.log('Error: No ESP32 port found!')
+            self.flash_button.config(state='disabled', bg='grey')
 
     def load_count(self):
         try:
@@ -84,65 +80,67 @@ class FlashApp:
         with open(COUNT_FILE, 'w') as f:
             f.write(str(self.flash_count))
 
+    def log(self, message):
+        self.log_area.config(state='normal')
+        self.log_area.insert('end', message + '\n')
+        self.log_area.yview('end')
+        self.log_area.config(state='disabled')
+        print(message)
+
     def play_sound(self, wav_path):
         self.root.bell()
         if os.path.exists(wav_path):
             subprocess.run(['aplay', wav_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def start_flash(self):
-        self.flash_button.config(state=tk.DISABLED, bg='yellow')
-        self.status_text.set('Flashing...')
+        self.flash_button.config(state='disabled', bg='yellow')
+        self.reset_button.config(state='disabled')
+        self.log('Starting flash sequence...')
         threading.Thread(target=self.flash_esp32, daemon=True).start()
 
     def flash_esp32(self):
         try:
-            self.update_status('Erasing flash...')
+            self.log('Erasing flash...')
             subprocess.run([
-                'python3', '-m', 'esptool',
-                '--chip', 'esp32',
-                '--port', self.PORT,
-                '--baud', BAUD,
-                'erase_flash'
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD, 'erase_flash'
             ], check=True)
 
-            self.update_status('Writing firmware...')
+            self.log('Writing firmware...')
             subprocess.run([
-                'python3', '-m', 'esptool',
-                '--chip', 'esp32',
-                '--port', self.PORT,
-                '--baud', BAUD,
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD,
                 'write_flash', '-z', '0x0', BIN
             ], check=True)
 
-            self.update_status('Resetting ESP32...')
+            self.log('Resetting ESP32...')
             subprocess.run([
-                'python3', '-m', 'esptool',
-                '--chip', 'esp32',
-                '--port', self.PORT,
-                '--baud', BAUD,
-                'run'
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD, 'run'
             ], check=True)
 
-            # Success
             self.flash_count += 1
             self.save_count()
-            self.count_text.set(f'Flashes Completed: {self.flash_count}')
-            self.update_status('✔ Flash complete.')
-            self.flash_button.config(bg='green')
+            self.log(f'✔ Flash complete ({self.flash_count} runs).')
             self.play_sound(SUCCESS_WAV)
+            self.flash_button.config(bg='green')
 
-        except subprocess.CalledProcessError:
-            self.update_status('❌ Flash failed.')
-            self.flash_button.config(bg='red')
+        except subprocess.CalledProcessError as e:
+            self.log(f'❌ Flash failed: {e}')
             self.play_sound(ERROR_WAV)
-            messagebox.showerror('Error', 'Flash failed.')
+            messagebox.showerror('Error', 'Flash failed. Use Reset to retry.')
+            self.flash_button.config(bg='red')
 
         finally:
-            self.flash_button.config(state=tk.NORMAL)
+            self.reset_button.config(state='normal')
 
-    def update_status(self, message):
-        self.status_text.set(message)
-        print(message)
+    def reset_ui(self):
+        # Clear logs and reset button states
+        self.log_area.config(state='normal')
+        self.log_area.delete('1.0', 'end')
+        self.log_area.config(state='disabled')
+        self.flash_button.config(state='normal', bg='green')
+        self.log('UI reset. Ready.')
 
 if __name__ == '__main__':
     root = tk.Tk()
