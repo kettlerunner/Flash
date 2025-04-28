@@ -1,5 +1,5 @@
 {
-  "bin": "/home/pi/FR1_FACTORY.bin",
+  "bin": "FR1_FACTORY.bin",
   "port": "/dev/ttyUSB0",
   "baud": 1152000,
   "count_file": "/home/pi/flash_count.txt",
