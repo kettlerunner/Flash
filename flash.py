@@ -7,13 +7,13 @@ import glob
 import os
 
 # Paths and settings
-BIN = '/home/pi/FR1_FACTORY.bin'  # Firmware binary
+BIN = '/home/pi/FR1_FACTORY.bin'       # Firmware binary
 BAUD = '1152000'
-COUNT_FILE = '/home/pi/flash_count.txt'  # Persist flash count
-SUCCESS_WAV = '/home/pi/success.wav'  # Place a success sound here
-ERROR_WAV = '/home/pi/error.wav'      # Place an error sound here
+COUNT_FILE = '/home/pi/flash_count.txt'
+SUCCESS_WAV = '/home/pi/success.wav'
+ERROR_WAV = '/home/pi/error.wav'
 
-# Detect ESP32 serial port automatically
+# Auto-detect ESP32 serial port
 def detect_port():
     ports = sorted(glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*'))
     return ports[-1] if ports else None
@@ -21,41 +21,46 @@ def detect_port():
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        self.root.title('ESP32 Flasher')
-        self.root.geometry('480x320')
-        self.root.attributes('-fullscreen', True)
+        # Borderless fullscreen & hide cursor
+        root.overrideredirect(True)
+        root.attributes('-fullscreen', True)
+        root.config(cursor='none')
 
-        # Exit fullscreen on ESC
-        self.root.bind('<Escape>', lambda e: self.root.quit())
+        # Screen dimensions
+        screen_w = root.winfo_screenwidth()
+        screen_h = root.winfo_screenheight()
+        # Dynamic font sizes
+        btn_size = int(screen_h * 0.2)
+        status_size = int(screen_h * 0.05)
+        count_size = int(screen_h * 0.04)
 
-        # UI Variables
+        # UI variables
         self.status_text = tk.StringVar(value='Ready to flash.')
         self.flash_count = self.load_count()
         self.count_text = tk.StringVar(value=f'Flashes Completed: {self.flash_count}')
 
-        # Flash button
+        # FLASH button
         self.flash_button = tk.Button(
-            root, text='FLASH', font=('Arial', 32),
-            bg='green', fg='white',
-            command=self.start_flash
+            root, text='FLASH', font=('Arial', btn_size),
+            bg='green', fg='white', command=self.start_flash
         )
-        self.flash_button.pack(expand=True, fill='both', pady=10, padx=10)
+        self.flash_button.pack(expand=True, fill='both', padx=10, pady=10)
 
         # Status label
         self.status_label = tk.Label(
             root, textvariable=self.status_text,
-            font=('Arial', 16)
+            font=('Arial', status_size)
         )
         self.status_label.pack()
 
         # Counter label
         self.counter_label = tk.Label(
             root, textvariable=self.count_text,
-            font=('Arial', 14)
+            font=('Arial', count_size)
         )
-        self.counter_label.pack(pady=(0,10))
+        self.counter_label.pack(pady=(0,20))
 
-        # Auto-detect port
+        # Detect port
         self.PORT = detect_port()
         if not self.PORT:
             messagebox.showerror('Error', 'No ESP32 port found!')
@@ -74,16 +79,14 @@ class FlashApp:
             f.write(str(self.flash_count))
 
     def play_sound(self, wav_path):
-        # System bell
         self.root.bell()
-        # Play WAV if exists
         if os.path.exists(wav_path):
             subprocess.run(['aplay', wav_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def start_flash(self):
         self.flash_button.config(state=tk.DISABLED, bg='yellow')
         self.status_text.set('Flashing...')
-        threading.Thread(target=self.flash_esp32).start()
+        threading.Thread(target=self.flash_esp32, daemon=True).start()
 
     def flash_esp32(self):
         try:
