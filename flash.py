@@ -5,68 +5,82 @@ import subprocess
 import threading
 import glob
 import os
+import json
 
-# Firmware and settings
-BIN = '/home/pi/FR1_FACTORY.bin'
-BAUD = '1152000'
-COUNT_FILE = '/home/pi/flash_count.txt'
-SUCCESS_WAV = '/home/pi/success.wav'
-ERROR_WAV = '/home/pi/error.wav'
+# Load configuration from settings.json
+CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'settings.json')
+try:
+    with open(CONFIG_PATH, 'r') as cfg_file:
+        cfg = json.load(cfg_file)
+except Exception as e:
+    print(f"Failed to load config '{CONFIG_PATH}': {e}")
+    exit(1)
 
-# Auto-detect ESP32 serial port
+# Assign settings
+BIN = cfg.get('bin')
+BAUD = str(cfg.get('baud', 1152000))
+COUNT_FILE = cfg.get('count_file')
+SUCCESS_WAV = cfg.get('success_wav')
+ERROR_WAV = cfg.get('error_wav')
+CONFIG_PORT = cfg.get('port')  # If provided, use this port; else auto-detect
+
+# Auto-detect ESP32 serial port if not specified
 def detect_port():
+    if CONFIG_PORT:
+        return CONFIG_PORT
     ports = sorted(glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*'))
     return ports[-1] if ports else None
 
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        # Borderless fullscreen and hide cursor
+        # Borderless fullscreen & hide cursor
         root.withdraw()
         root.overrideredirect(True)
         root.attributes('-fullscreen', True, '-topmost', True)
         root.config(cursor='none')
         root.update_idletasks()
-        # Geometry ensures full coverage
         width = root.winfo_screenwidth()
         height = root.winfo_screenheight()
         root.geometry(f"{width}x{height}+0+0")
         root.deiconify()
 
-        # UI frames
-        btn_frame = tk.Frame(root, bg='#333')
+        # Top button frame
+        btn_frame = tk.Frame(root, bg='#222')
         btn_frame.pack(fill='x', pady=5)
 
-        # Buttons
+        # Flash button
         self.flash_button = tk.Button(
             btn_frame, text='Flash', font=('Arial', 20), bg='green', fg='white',
             width=10, command=self.start_flash
         )
         self.flash_button.pack(side='left', padx=10)
 
+        # Reset button
         self.reset_button = tk.Button(
             btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
             width=10, command=self.reset_ui
         )
         self.reset_button.pack(side='left', padx=10)
 
+        # Close button
         self.close_button = tk.Button(
             btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
             width=10, command=root.quit
         )
         self.close_button.pack(side='right', padx=10)
 
-        # Status log area
+        # Scrolled status log
         self.log_area = scrolledtext.ScrolledText(
             root, state='disabled', font=('Courier', 14), bg='#111', fg='#0f0', wrap='word'
         )
         self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
 
-        # Initialize
+        # Initialize flash count and port
         self.flash_count = self.load_count()
         self.PORT = detect_port()
         if not self.PORT:
-            self.log('Error: No ESP32 port found!')
+            self.log(f"Error: No serial port found!")
             self.flash_button.config(state='disabled', bg='grey')
 
     def load_count(self):
@@ -87,10 +101,10 @@ class FlashApp:
         self.log_area.config(state='disabled')
         print(message)
 
-    def play_sound(self, wav_path):
+    def play_sound(self, wav):
         self.root.bell()
-        if os.path.exists(wav_path):
-            subprocess.run(['aplay', wav_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        if wav and os.path.exists(wav):
+            subprocess.run(['aplay', wav], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def start_flash(self):
         self.flash_button.config(state='disabled', bg='yellow')
@@ -135,7 +149,6 @@ class FlashApp:
             self.reset_button.config(state='normal')
 
     def reset_ui(self):
-        # Clear logs and reset button states
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
