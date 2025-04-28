@@ -21,14 +21,20 @@ def detect_port():
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        # Borderless fullscreen & hide cursor
+        # Remove window decorations and force fullscreen
+        root.withdraw()  # Hide window while configuring
         root.overrideredirect(True)
         root.attributes('-fullscreen', True)
-        root.config(cursor='none')
+        root.attributes('-topmost', True)
 
-        # Screen dimensions
+        # Get screen size
+        root.update_idletasks()
         screen_w = root.winfo_screenwidth()
         screen_h = root.winfo_screenheight()
+        root.geometry(f"{screen_w}x{screen_h}+0+0")
+        root.config(cursor='none')
+        root.deiconify()  # Show window now that it's fullscreen
+
         # Dynamic font sizes
         btn_size = int(screen_h * 0.2)
         status_size = int(screen_h * 0.05)
