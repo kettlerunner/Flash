@@ -7,8 +7,11 @@ import glob
 import os
 import json
 
-# Load configuration from settings.json
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), 'settings.json')
+# Paths
+SCRIPT_DIR = os.path.dirname(__file__)
+CONFIG_PATH = os.path.join(SCRIPT_DIR, 'settings.json')
+
+# Load configuration
 try:
     with open(CONFIG_PATH, 'r') as cfg_file:
         cfg = json.load(cfg_file)
@@ -22,66 +25,73 @@ BAUD = str(cfg.get('baud', 1152000))
 COUNT_FILE = cfg.get('count_file')
 SUCCESS_WAV = cfg.get('success_wav')
 ERROR_WAV = cfg.get('error_wav')
-CONFIG_PORT = cfg.get('port')  # If provided, use this port; else auto-detect
+CONFIG_PORT = cfg.get('port')  # may be None
 
-# Auto-detect ESP32 serial port if not specified
-def detect_port():
-    if CONFIG_PORT:
-        return CONFIG_PORT
-    ports = sorted(glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*'))
-    return ports[-1] if ports else None
+# Helpers
+def list_ports():
+    return sorted(glob.glob('/dev/ttyUSB*') + glob.glob('/dev/ttyACM*'))
+
+def update_config(key, value):
+    cfg[key] = value
+    try:
+        with open(CONFIG_PATH, 'w') as cfg_file:
+            json.dump(cfg, cfg_file, indent=2)
+    except Exception as e:
+        print(f"Failed to update config: {e}")
 
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        # Borderless fullscreen & hide cursor
+        # Fullscreen kiosk
         root.withdraw()
         root.overrideredirect(True)
         root.attributes('-fullscreen', True, '-topmost', True)
         root.config(cursor='none')
         root.update_idletasks()
-        width = root.winfo_screenwidth()
-        height = root.winfo_screenheight()
-        root.geometry(f"{width}x{height}+0+0")
+        w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+        root.geometry(f"{w}x{h}+0+0")
         root.deiconify()
 
-        # Top button frame
+        # Top frame for buttons
         btn_frame = tk.Frame(root, bg='#222')
         btn_frame.pack(fill='x', pady=5)
 
-        # Flash button
-        self.flash_button = tk.Button(
-            btn_frame, text='Flash', font=('Arial', 20), bg='green', fg='white',
-            width=10, command=self.start_flash
-        )
+        self.flash_button = tk.Button(btn_frame, text='Flash', font=('Arial', 20),
+                                      bg='green', fg='white', width=10,
+                                      command=self.start_flash)
         self.flash_button.pack(side='left', padx=10)
-
-        # Reset button
-        self.reset_button = tk.Button(
-            btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
-            width=10, command=self.reset_ui
-        )
+        self.reset_button = tk.Button(btn_frame, text='Reset', font=('Arial', 20),
+                                      bg='orange', fg='white', width=10,
+                                      command=self.reset_ui)
         self.reset_button.pack(side='left', padx=10)
-
-        # Close button
-        self.close_button = tk.Button(
-            btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
-            width=10, command=root.quit
-        )
+        self.close_button = tk.Button(btn_frame, text='Close', font=('Arial', 20),
+                                      bg='red', fg='white', width=10,
+                                      command=root.quit)
         self.close_button.pack(side='right', padx=10)
 
-        # Scrolled status log
-        self.log_area = scrolledtext.ScrolledText(
-            root, state='disabled', font=('Courier', 14), bg='#111', fg='#0f0', wrap='word'
-        )
+        # Log area
+        self.log_area = scrolledtext.ScrolledText(root, state='disabled',
+                                                  font=('Courier', 14), bg='#111', fg='#0f0', wrap='word')
         self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
 
-        # Initialize flash count and port
-        self.flash_count = self.load_count()
-        self.PORT = detect_port()
-        if not self.PORT:
-            self.log(f"Error: No serial port found!")
+        # Determine serial port
+        available = list_ports()
+        if CONFIG_PORT and CONFIG_PORT in available:
+            self.PORT = CONFIG_PORT
+            self.log(f"Using configured port: {self.PORT}")
+        elif available:
+            new_port = available[-1]
+            self.PORT = new_port
+            self.log(f"Configured port '{CONFIG_PORT}' not found. Using '{new_port}'.")
+            update_config('port', new_port)
+            self.log(f"Updated settings.json with port: {new_port}")
+        else:
+            self.PORT = None
+            self.log("Error: No serial ports detected!")
             self.flash_button.config(state='disabled', bg='grey')
+
+        # Load flash count
+        self.flash_count = self.load_count()
 
     def load_count(self):
         try:
@@ -91,8 +101,11 @@ class FlashApp:
             return 0
 
     def save_count(self):
-        with open(COUNT_FILE, 'w') as f:
-            f.write(str(self.flash_count))
+        try:
+            with open(COUNT_FILE, 'w') as f:
+                f.write(str(self.flash_count))
+        except Exception as e:
+            self.log(f"Warning: could not save count: {e}")
 
     def log(self, message):
         self.log_area.config(state='normal')
@@ -107,6 +120,9 @@ class FlashApp:
             subprocess.run(['aplay', wav], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def start_flash(self):
+        if not self.PORT:
+            self.log('Cannot flash: no port available')
+            return
         self.flash_button.config(state='disabled', bg='yellow')
         self.reset_button.config(state='disabled')
         self.log('Starting flash sequence...')
@@ -115,23 +131,17 @@ class FlashApp:
     def flash_esp32(self):
         try:
             self.log('Erasing flash...')
-            subprocess.run([
-                'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD, 'erase_flash'
-            ], check=True)
-
+            subprocess.run(['python3', '-m', 'esptool',
+                             '--chip', 'esp32', '--port', self.PORT,
+                             '--baud', BAUD, 'erase_flash'], check=True)
             self.log('Writing firmware...')
-            subprocess.run([
-                'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD,
-                'write_flash', '-z', '0x0', BIN
-            ], check=True)
-
+            subprocess.run(['python3', '-m', 'esptool',
+                             '--chip', 'esp32', '--port', self.PORT,
+                             '--baud', BAUD, 'write_flash', '-z', '0x0', BIN], check=True)
             self.log('Resetting ESP32...')
-            subprocess.run([
-                'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD, 'run'
-            ], check=True)
+            subprocess.run(['python3', '-m', 'esptool',
+                             '--chip', 'esp32', '--port', self.PORT,
+                             '--baud', BAUD, 'run'], check=True)
 
             self.flash_count += 1
             self.save_count()
@@ -144,7 +154,6 @@ class FlashApp:
             self.play_sound(ERROR_WAV)
             messagebox.showerror('Error', 'Flash failed. Use Reset to retry.')
             self.flash_button.config(bg='red')
-
         finally:
             self.reset_button.config(state='normal')
 
