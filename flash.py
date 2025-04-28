@@ -104,34 +104,55 @@ class FlashApp:
             subprocess.run(['aplay', wav], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def initialize_comm(self):
+        # Detect available ports
         ports = list_ports()
+        # Choose configured or latest
         if CONFIG_PORT and CONFIG_PORT in ports:
             self.PORT = CONFIG_PORT
             self.log(f"Using configured port: {self.PORT}")
         elif ports:
             self.PORT = ports[-1]
-            self.log(f"Configured port '{CONFIG_PORT}' not available. Using '{self.PORT}'.")
+            self.log(f"Configured port '{CONFIG_PORT}' not available. Using '{self.PORT}'")
             update_config('port', self.PORT)
+            self.log(f"Updated settings.json with port: {self.PORT}")
         else:
             self.PORT = None
             self.log("Error: No serial ports detected!")
+            self.flash_button.config(state='disabled', bg='grey')
+            return
 
-        if self.PORT and self.check_esp():
+        # Try probe at configured baud
+        if self.probe_esp(BAUD):
+            self.log(f"Comm OK at baud {BAUD}")
             self.flash_button.config(state='normal', bg='green')
         else:
-            self.flash_button.config(state='disabled', bg='grey')
+            # Fallback to 115200
+            fallback = '115200'
+            self.log(f"Probe failed at baud {BAUD}. Retrying at {fallback}...")
+            if self.probe_esp(fallback):
+                self.log(f"Comm OK at fallback baud {fallback}")
+                update_config('baud', int(fallback))
+                self.flash_button.config(state='normal', bg='green')
+            else:
+                self.log("Error: Cannot communicate with ESP32 on any baud.")
+                self.flash_button.config(state='disabled', bg='grey')
 
-    def check_esp(self):
-        self.log(f"Probing ESP32 on {self.PORT}...")
+    def probe_esp(self, baud):
+        self.log(f"Probing ESP32 on {self.PORT} at {baud} baud...")
         try:
             output = subprocess.check_output([
-                'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD, 'chip_id'
+                'python3', '-m', 'esptool',
+                '--chip', 'esp32',
+                '--port', self.PORT,
+                '--baud', baud,
+                'chip_id'
             ], stderr=subprocess.STDOUT, text=True, timeout=5)
             self.log(output.strip())
             return True
         except subprocess.CalledProcessError as e:
             self.log(f"Comm error: {e.output.strip()}")
+        except subprocess.TimeoutExpired:
+            self.log("Comm error: timeout")
         except Exception as e:
             self.log(f"Comm error: {e}")
         return False
@@ -172,11 +193,10 @@ class FlashApp:
             self.reset_button.config(state='normal')
 
     def reset_ui(self):
-        # Clear log
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
-        # Re-initialize comms
+        # Re-init comms to re-test and update UI
         self.initialize_comm()
         self.log('UI reset. Ready.')
 
