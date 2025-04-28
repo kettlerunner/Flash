@@ -2,7 +2,7 @@
   "bin": "FR1_FACTORY.bin",
   "port": "/dev/ttyUSB0",
   "baud": 1152000,
-  "count_file": "/home/pi/flash_count.txt",
+  "count_file": "/home/admin/Flash/flash_count.txt",
   "success_wav": "/home/pi/success.wav",
   "error_wav": "/home/pi/error.wav"
 }
