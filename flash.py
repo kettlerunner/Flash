@@ -52,6 +52,17 @@ class FlashApp:
         root.geometry(f"{w}x{h}+0+0")
         root.deiconify()
 
+        # Top frame for config
+        config_frame = tk.Frame(root, bg='#222')
+        config_frame.pack(fill='x', pady=5)
+        tk.Label(config_frame, text='Port:', font=('Arial', 16), fg='white', bg='#222').pack(side='left', padx=(10,0))
+        # Port selection
+        self.available_ports = list_ports()
+        self.port_var = tk.StringVar(value=CONFIG_PORT if CONFIG_PORT in self.available_ports else (self.available_ports[-1] if self.available_ports else ''))
+        self.port_menu = tk.OptionMenu(config_frame, self.port_var, *self.available_ports, command=self.on_port_change)
+        self.port_menu.config(font=('Arial', 16), bg='#444', fg='white')
+        self.port_menu.pack(side='left', padx=5)
+
         # Button frame
         btn_frame = tk.Frame(root, bg='#222')
         btn_frame.pack(fill='x', pady=5)
@@ -75,7 +86,13 @@ class FlashApp:
 
         # Initialize
         self.flash_count = self.load_count()
-        self.initialize_comm()  # detect and verify comm port
+        self.initialize_comm()
+
+    def on_port_change(self, new_port):
+        # Called when user selects a different port
+        update_config('port', new_port)
+        self.log(f"Port manually set to: {new_port}")
+        self.initialize_comm()
 
     def load_count(self):
         try:
@@ -104,29 +121,32 @@ class FlashApp:
             subprocess.run(['aplay', wav], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def initialize_comm(self):
-        # Detect available ports
-        ports = list_ports()
-        # Choose configured or latest
-        if CONFIG_PORT and CONFIG_PORT in ports:
-            self.PORT = CONFIG_PORT
-            self.log(f"Using configured port: {self.PORT}")
-        elif ports:
-            self.PORT = ports[-1]
-            self.log(f"Configured port '{CONFIG_PORT}' not available. Using '{self.PORT}'")
-            update_config('port', self.PORT)
-            self.log(f"Updated settings.json with port: {self.PORT}")
-        else:
-            self.PORT = None
+        # refresh available ports
+        self.available_ports = list_ports()
+        menu = self.port_menu['menu']
+        menu.delete(0, 'end')
+        for p in self.available_ports:
+            menu.add_command(label=p, command=lambda v=p: self.port_var.set(v))
+        # ensure port_var is valid
+        selected = self.port_var.get()
+        if selected not in self.available_ports:
+            if self.available_ports:
+                selected = self.available_ports[-1]
+                self.port_var.set(selected)
+                update_config('port', selected)
+                self.log(f"Port '{CONFIG_PORT}' unavailable. Auto-set to {selected}.")
+        self.PORT = selected if selected else None
+        if not self.PORT:
             self.log("Error: No serial ports detected!")
             self.flash_button.config(state='disabled', bg='grey')
             return
 
-        # Try probe at configured baud
+        update_config('port', self.PORT)
+        # probe at configured baud
         if self.probe_esp(BAUD):
             self.log(f"Comm OK at baud {BAUD}")
             self.flash_button.config(state='normal', bg='green')
         else:
-            # Fallback to 115200
             fallback = '115200'
             self.log(f"Probe failed at baud {BAUD}. Retrying at {fallback}...")
             if self.probe_esp(fallback):
@@ -196,7 +216,6 @@ class FlashApp:
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
-        # Re-init comms to re-test and update UI
         self.initialize_comm()
         self.log('UI reset. Ready.')
 
