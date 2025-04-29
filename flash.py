@@ -54,7 +54,7 @@ class FlashApp:
 
         # Top frame
         btn_frame = tk.Frame(root, bg='#222')
-        btn_frame.pack(fill='x', pady=5)
+        btn_frame.pack(fill='x', pady=10)
 
         # Cycle Port button
         self.port_list = list_ports()
@@ -65,30 +65,30 @@ class FlashApp:
         self.PORT = self.port_list[self.port_index] if self.port_list else None
         self.cycle_button = tk.Button(
             btn_frame, text=f"Port: {self.PORT or 'None'}", font=('Arial', 16),
-            bg='blue', fg='white', width=16, command=self.cycle_port
+            bg='blue', fg='white', width=16, height=2, command=self.cycle_port
         )
-        self.cycle_button.pack(side='left', padx=10)
+        self.cycle_button.pack(side='left', padx=10, pady=10)
 
         # Flash button
         self.flash_button = tk.Button(
             btn_frame, text='Flash', font=('Arial', 20), bg='grey', fg='white',
-            width=10, command=self.start_flash, state='disabled'
+            width=10, height=2, command=self.start_flash, state='disabled'
         )
-        self.flash_button.pack(side='left', padx=10)
+        self.flash_button.pack(side='left', padx=10, pady=10)
 
         # Reset button
         self.reset_button = tk.Button(
             btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
-            width=10, command=self.reset_ui
+            width=10, height=2, command=self.reset_ui
         )
-        self.reset_button.pack(side='left', padx=10)
+        self.reset_button.pack(side='left', padx=10, pady=10)
 
         # Close button
         self.close_button = tk.Button(
             btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
-            width=10, command=root.quit
+            width=10, height=2, command=root.quit
         )
-        self.close_button.pack(side='right', padx=10)
+        self.close_button.pack(side='right', padx=10, pady=10)
 
         # Log area
         self.log_area = scrolledtext.ScrolledText(
