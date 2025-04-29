@@ -43,6 +43,7 @@
  class FlashApp:
      def __init__(self, root):
          self.root = root
+         # Fullscreen kiosk
          root.withdraw()
          root.overrideredirect(True)
          root.attributes('-fullscreen', True, '-topmost', True)
@@ -51,9 +52,11 @@
          root.geometry(f"{w}x{h}+0+0")
          root.deiconify()
  
+         # Top frame
          btn_frame = tk.Frame(root, bg='#222')
          btn_frame.pack(fill='x', pady=(0,10))
  
+         # Cycle Port button
          self.port_list = list_ports()
          if CONFIG_PORT in self.port_list:
              self.port_index = self.port_list.index(CONFIG_PORT)
@@ -66,30 +69,35 @@
          )
          self.cycle_button.pack(side='left', padx=10, pady=10)
  
+         # Flash button
          self.flash_button = tk.Button(
              btn_frame, text='Flash', font=('Arial', 20), bg='grey', fg='white',
              width=10, height=2, command=self.start_flash, state='disabled'
          )
          self.flash_button.pack(side='left', padx=10, pady=10)
  
+         # Reset button
          self.reset_button = tk.Button(
              btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
              width=10, height=2, command=self.reset_ui
          )
          self.reset_button.pack(side='left', padx=10, pady=10)
  
+         # Close button
          self.close_button = tk.Button(
              btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
              width=10, height=2, command=root.quit
          )
          self.close_button.pack(side='right', padx=10, pady=10)
  
+         # Log area
          self.log_area = scrolledtext.ScrolledText(
              root, state='disabled', font=('Courier', 14),
              bg='#111', fg='#0f0', wrap='word'
          )
          self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
  
+         # Initialize state
          self.flash_count = self.load_count()
          self.initialize_comm()
  
@@ -109,6 +117,7 @@
          try:
              with open(COUNT_FILE, 'r') as f:
                  return int(f.read().strip())
+         except Exception:
          except:
              return 0
  
@@ -137,6 +146,7 @@
              self.flash_button.config(state='disabled', bg='grey')
              return
          self.cycle_button.config(text=f"Port: {self.PORT}")
+         # Probe at configured baud
          if self.probe_esp(BAUD):
              self.log(f"Comm OK at baud {BAUD}")
              self.flash_button.config(state='normal', bg='green')
@@ -144,6 +154,7 @@
              fallback = '115200'
              self.log(f"Probe failed at {BAUD}, retrying at {fallback}...")
              if self.probe_esp(fallback):
+                 self.log(f"Comm OK at fallback baud {fallback}")
                  update_config('baud', int(fallback))
                  self.log(f"Comm OK at fallback baud {fallback}")
                  self.flash_button.config(state='normal', bg='green')
@@ -182,24 +193,28 @@
                  '--port', self.PORT, '--baud', BAUD, 'erase_flash'
              ], check=True)
  
+             # Write firmware with progress parsing
              self.log('Writing firmware...')
              cmd = [
                  'python3', '-m', 'esptool', '--chip', 'esp32',
+                 '--port', self.PORT, '--baud', BAUD,
+                 'write_flash', '-z', '0x0', BIN
                  '--port', self.PORT, '--baud', BAUD, 'write_flash', '-z', '0x0', BIN
              ]
              proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
              for line in proc.stdout:
                  line = line.strip()
                  m = re.search(r"\((\d+)%\)", line)
-                 m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
                  if m:
                      self.log(f"Progress: {m.group(1)}%")
              ret = proc.wait()
              if ret != 0:
                  raise subprocess.CalledProcessError(ret, cmd)
  
+             # Auto-reset after successful write
              self.log('Auto-resetting ESP32...')
              self.reset_esp()
+             # Re-initialize communications automatically
              self.initialize_comm()
  
              self.flash_count += 1
@@ -232,12 +247,15 @@
              self.log(f'Hardware reset failed: {e}')
  
      def reset_ui(self):
+         # Clear log
          self.log_area.config(state='normal')
          self.log_area.delete('1.0', 'end')
          self.log_area.config(state='disabled')
+         # Re-init comms
          self.initialize_comm()
          self.log('UI reset. Ready.')
  
  if __name__ == '__main__':
      root = tk.Tk()
      app = FlashApp(root)
+     root.mainloop()
