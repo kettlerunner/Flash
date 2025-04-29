@@ -83,6 +83,15 @@ class FlashApp:
         )
         self.close_button.pack(side='right', padx=10, pady=10)
 
+        # Progress bar label
+        self.progress_var = tk.StringVar(value='')
+        self.progress_label = tk.Label(
+            root, textvariable=self.progress_var,
+            font=('Courier', 18), bg='#111', fg='#0f0'
+        )
+        self.progress_label.pack(fill='x', padx=10)
+
+        # Log area
         self.log_area = scrolledtext.ScrolledText(
             root, state='disabled', font=('Courier', 14),
             bg='#111', fg='#0f0', wrap='word'
@@ -188,10 +197,11 @@ class FlashApp:
             ]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in proc.stdout:
-                line = line.strip()
-                m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
+                m = re.search(r"\(\s*(\d+)%\s*\)", line)
                 if m:
-                    self.log(f"Progress: {m.group(1)}%")
+                    percent = int(m.group(1))
+                    bars = '|' * (percent // 5)  # 20 bars max
+                    self.progress_var.set(bars)
             ret = proc.wait()
             if ret != 0:
                 raise subprocess.CalledProcessError(ret, cmd)
