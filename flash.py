@@ -54,7 +54,7 @@ class FlashApp:
 
         # Top frame
         btn_frame = tk.Frame(root, bg='#222')
-        btn_frame.pack(fill='x', pady=10)
+        btn_frame.pack(fill='x', pady=(0,10))
 
         # Cycle Port button
         self.port_list = list_ports()
