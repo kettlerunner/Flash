@@ -6,6 +6,7 @@ import threading
 import glob
 import os
 import json
+import re
 
 # Paths
 SCRIPT_DIR = os.path.dirname(__file__)
@@ -42,7 +43,7 @@ def update_config(key, value):
 class FlashApp:
     def __init__(self, root):
         self.root = root
-        # Fullscreen kiosk without hiding cursor
+        # Fullscreen kiosk
         root.withdraw()
         root.overrideredirect(True)
         root.attributes('-fullscreen', True, '-topmost', True)
@@ -51,7 +52,7 @@ class FlashApp:
         root.geometry(f"{w}x{h}+0+0")
         root.deiconify()
 
-        # Top button frame
+        # Top frame
         btn_frame = tk.Frame(root, bg='#222')
         btn_frame.pack(fill='x', pady=5)
 
@@ -74,12 +75,14 @@ class FlashApp:
             width=10, command=self.start_flash, state='disabled'
         )
         self.flash_button.pack(side='left', padx=10)
+
         # Reset button
         self.reset_button = tk.Button(
             btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
             width=10, command=self.reset_ui
         )
         self.reset_button.pack(side='left', padx=10)
+
         # Close button
         self.close_button = tk.Button(
             btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
@@ -94,7 +97,7 @@ class FlashApp:
         )
         self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
 
-        # Initialize count and comms
+        # Initialize state
         self.flash_count = self.load_count()
         self.initialize_comm()
 
@@ -174,20 +177,6 @@ class FlashApp:
             self.log(f"Comm error: {e}")
         return False
 
-    def reset_esp(self):
-        if not self.PORT:
-            self.log("Cannot reset: no serial port.")
-            return
-        self.log('Performing hardware reset...')
-        try:
-            subprocess.run([
-                'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD, 'run'
-            ], check=True)
-            self.log('ESP32 hardware reset successful.')
-        except Exception as e:
-            self.log(f'ESP32 reset failed: {e}')
-
     def start_flash(self):
         self.flash_button.config(state='disabled', bg='yellow')
         self.reset_button.config(state='disabled')
@@ -197,15 +186,33 @@ class FlashApp:
     def flash_esp32(self):
         try:
             self.log('Erasing flash...')
-            subprocess.run(['python3', '-m', 'esptool',
-                             '--chip', 'esp32', '--port', self.PORT,
-                             '--baud', BAUD, 'erase_flash'], check=True)
+            subprocess.run([
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD, 'erase_flash'
+            ], check=True)
+
+            # Write firmware with progress parsing
             self.log('Writing firmware...')
-            subprocess.run(['python3', '-m', 'esptool',
-                             '--chip', 'esp32', '--port', self.PORT,
-                             '--baud', BAUD, 'write_flash', '-z', '0x0', BIN], check=True)
-            self.log('Resetting ESP32 after write...')
+            cmd = [
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD,
+                'write_flash', '-z', '0x0', BIN
+            ]
+            proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            for line in proc.stdout:
+                line = line.strip()
+                m = re.search(r"\((\d+)%\)", line)
+                if m:
+                    self.log(f"Progress: {m.group(1)}%")
+            ret = proc.wait()
+            if ret != 0:
+                raise subprocess.CalledProcessError(ret, cmd)
+
+            # Auto-reset after successful write
+            self.log('Auto-resetting ESP32...')
             self.reset_esp()
+            # Re-initialize communications automatically
+            self.initialize_comm()
 
             self.flash_count += 1
             self.save_count()
@@ -218,17 +225,30 @@ class FlashApp:
             self.play_sound(ERROR_WAV)
             messagebox.showerror('Error', 'Flash failed. Use Reset to retry.')
             self.flash_button.config(bg='red')
+
         finally:
             self.reset_button.config(state='normal')
 
+    def reset_esp(self):
+        if not self.PORT:
+            self.log("Cannot reset: no port.")
+            return
+        self.log('Performing hardware reset...')
+        try:
+            subprocess.run([
+                'python3', '-m', 'esptool', '--chip', 'esp32',
+                '--port', self.PORT, '--baud', BAUD, 'run'
+            ], check=True)
+            self.log('Hardware reset successful.')
+        except Exception as e:
+            self.log(f'Hardware reset failed: {e}')
+
     def reset_ui(self):
-        # Attempt a full hardware reset first
-        self.reset_esp()
         # Clear log
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
-        # Re-initialize comms and UI
+        # Re-init comms
         self.initialize_comm()
         self.log('UI reset. Ready.')
 
