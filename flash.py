@@ -189,7 +189,7 @@ class FlashApp:
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in proc.stdout:
                 line = line.strip()
-                m = re.search(r"\((\d+)%\)", line)
+                m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
                 if m:
                     self.log(f"Progress: {m.group(1)}%")
             ret = proc.wait()
