@@ -8,7 +8,8 @@ import os
 import json
 import re
 
-# Paths\SCRIPT_DIR = os.path.dirname(__file__)
+# Paths
+SCRIPT_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(SCRIPT_DIR, 'settings.json')
 
 # Load configuration
