@@ -8,8 +8,7 @@ import os
 import json
 import re
 
-# Paths
-SCRIPT_DIR = os.path.dirname(__file__)
+# Paths\SCRIPT_DIR = os.path.dirname(__file__)
 CONFIG_PATH = os.path.join(SCRIPT_DIR, 'settings.json')
 
 # Load configuration
@@ -43,6 +42,7 @@ def update_config(key, value):
 class FlashApp:
     def __init__(self, root):
         self.root = root
+        # Fullscreen kiosk
         root.withdraw()
         root.overrideredirect(True)
         root.attributes('-fullscreen', True, '-topmost', True)
@@ -51,10 +51,11 @@ class FlashApp:
         root.geometry(f"{w}x{h}+0+0")
         root.deiconify()
 
+        # Top frame for controls
         btn_frame = tk.Frame(root, bg='#222')
         btn_frame.pack(fill='x', pady=(0,10))
 
-        self.port_list = list_ports()
+        # Cycle Port button\        self.port_list = list_ports()
         if CONFIG_PORT in self.port_list:
             self.port_index = self.port_list.index(CONFIG_PORT)
         else:
@@ -66,30 +67,43 @@ class FlashApp:
         )
         self.cycle_button.pack(side='left', padx=10, pady=10)
 
+        # Flash button
         self.flash_button = tk.Button(
             btn_frame, text='Flash', font=('Arial', 20), bg='grey', fg='white',
             width=10, height=2, command=self.start_flash, state='disabled'
         )
         self.flash_button.pack(side='left', padx=10, pady=10)
 
+        # Reset button
         self.reset_button = tk.Button(
             btn_frame, text='Reset', font=('Arial', 20), bg='orange', fg='white',
             width=10, height=2, command=self.reset_ui
         )
         self.reset_button.pack(side='left', padx=10, pady=10)
 
+        # Close button
         self.close_button = tk.Button(
             btn_frame, text='Close', font=('Arial', 20), bg='red', fg='white',
             width=10, height=2, command=root.quit
         )
         self.close_button.pack(side='right', padx=10, pady=10)
 
+        # Progress bar label
+        self.progress_var = tk.StringVar(value='')
+        self.progress_label = tk.Label(
+            root, textvariable=self.progress_var,
+            font=('Courier', 18), bg='#111', fg='#0f0'
+        )
+        self.progress_label.pack(fill='x', padx=10)
+
+        # Log area
         self.log_area = scrolledtext.ScrolledText(
             root, state='disabled', font=('Courier', 14),
             bg='#111', fg='#0f0', wrap='word'
         )
         self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
 
+        # Initialize state
         self.flash_count = self.load_count()
         self.initialize_comm()
 
@@ -182,17 +196,20 @@ class FlashApp:
                 '--port', self.PORT, '--baud', BAUD, 'erase_flash'
             ], check=True)
 
+            # Write firmware with progress bar update
             self.log('Writing firmware...')
             cmd = [
                 'python3', '-m', 'esptool', '--chip', 'esp32',
-                '--port', self.PORT, '--baud', BAUD, 'write_flash', '-z', '0x0', BIN
+                '--port', self.PORT, '--baud', BAUD,
+                'write_flash', '-z', '0x0', BIN
             ]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in proc.stdout:
-                line = line.strip()
-                m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
+                m = re.search(r"\(\s*(\d+)%\s*\)", line)
                 if m:
-                    self.log(f"Progress: {m.group(1)}%")
+                    percent = int(m.group(1))
+                    bars = '|' * (percent // 5)  # 20 bars max
+                    self.progress_var.set(bars)
             ret = proc.wait()
             if ret != 0:
                 raise subprocess.CalledProcessError(ret, cmd)
@@ -231,6 +248,7 @@ class FlashApp:
             self.log(f'Hardware reset failed: {e}')
 
     def reset_ui(self):
+        self.progress_var.set('')
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
