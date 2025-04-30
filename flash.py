@@ -197,7 +197,7 @@ class FlashApp:
             ]
             proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
             for line in proc.stdout:
-                m = re.search(r"\(\s*(\d+)%\s*\)", line)
+                m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
                 if m:
                     percent = int(m.group(1))
                     bars = '|' * (percent // 5)  # 20 bars max
