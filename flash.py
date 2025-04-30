@@ -204,7 +204,7 @@ class FlashApp:
                 if m:
                     percent = int(m.group(1))
                     bars = '#' * 2 * (percent // 5)  # 40 bars max
-                    self.progress_var.set(bars)
+                    self.progress_var.set(f"Progress: {bars}")
             ret = proc.wait()
             if ret != 0:
                 raise subprocess.CalledProcessError(ret, cmd)
