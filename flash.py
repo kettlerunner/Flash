@@ -203,7 +203,7 @@ class FlashApp:
                 m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
                 if m:
                     percent = int(m.group(1))
-                    bars = '#' * (percent // 5)  # 20 bars max
+                    bars = '#' * 2 * (percent // 5)  # 40 bars max
                     self.progress_var.set(bars)
             ret = proc.wait()
             if ret != 0:
@@ -217,6 +217,7 @@ class FlashApp:
             self.save_count()
             self.log(f'✔ Flash complete ({self.flash_count} runs).')
             self.play_sound(SUCCESS_WAV)
+            self.progress_var = tk.StringVar(value='')
             self.flash_button.config(bg='green')
 
         except subprocess.CalledProcessError as e:
@@ -243,6 +244,7 @@ class FlashApp:
             self.log(f'Hardware reset failed: {e}')
 
     def reset_ui(self):
+        self.progress_var = tk.StringVar(value='')
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
