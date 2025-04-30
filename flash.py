@@ -187,6 +187,7 @@ class FlashApp:
 
     def flash_esp32(self):
         try:
+            self.progress_var.set('')
             self.log('Erasing flash...')
             subprocess.run([
                 'python3', '-m', 'esptool', '--chip', 'esp32',
