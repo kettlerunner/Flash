@@ -86,17 +86,20 @@ class FlashApp:
         # Progress bar label
         self.progress_var = tk.StringVar(value='')
         self.progress_label = tk.Label(
-            root, textvariable=self.progress_var,
-            font=('Courier', 18), bg='#111', fg='#0f0'
+            root,
+            textvariable=self.progress_var,
+            font=('Courier', 18),
+            bg='#111', fg='#0f0',
+            anchor='w', justify='left'
         )
-        self.progress_label.pack(fill='x', padx=10)
+        self.progress_label.pack(fill='x', padx=10, pady=(0,5))
 
         # Log area
         self.log_area = scrolledtext.ScrolledText(
             root, state='disabled', font=('Courier', 14),
             bg='#111', fg='#0f0', wrap='word'
         )
-        self.log_area.pack(expand=True, fill='both', padx=10, pady=(0,10))
+        self.log_area.pack(expand=True, fill='both', padx=10, pady=(5,10))
 
         self.flash_count = self.load_count()
         self.initialize_comm()
@@ -200,7 +203,7 @@ class FlashApp:
                 m = re.search(r"\(\s*(\d+)\s*%\s*\)", line)
                 if m:
                     percent = int(m.group(1))
-                    bars = '|' * (percent // 5)  # 20 bars max
+                    bars = '#' * (percent // 5)  # 20 bars max
                     self.progress_var.set(bars)
             ret = proc.wait()
             if ret != 0:
