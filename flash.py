@@ -217,7 +217,6 @@ class FlashApp:
             self.save_count()
             self.log(f'✔ Flash complete ({self.flash_count} runs).')
             self.play_sound(SUCCESS_WAV)
-            self.progress_var = tk.StringVar(value='')
             self.flash_button.config(bg='green')
 
         except subprocess.CalledProcessError as e:
@@ -244,7 +243,6 @@ class FlashApp:
             self.log(f'Hardware reset failed: {e}')
 
     def reset_ui(self):
-        self.progress_var = tk.StringVar(value='')
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
