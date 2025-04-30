@@ -217,11 +217,13 @@ class FlashApp:
 
             self.flash_count += 1
             self.save_count()
+            self.progress_var.set(f"Progress: ✔ complete")
             self.log(f'✔ Flash complete ({self.flash_count} runs).')
             self.play_sound(SUCCESS_WAV)
             self.flash_button.config(bg='green')
 
         except subprocess.CalledProcessError as e:
+            self.progress_var.set(f'❌ Flash failed: {e}'")
             self.log(f'❌ Flash failed: {e}')
             self.play_sound(ERROR_WAV)
             messagebox.showerror('Error', 'Flash failed. Use Reset to retry.')
