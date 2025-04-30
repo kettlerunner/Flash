@@ -188,7 +188,7 @@ class FlashApp:
 
     def flash_esp32(self):
         try:
-            self.progress_var.set('')
+            self.progress_var.set('Progress: ')
             self.log('Erasing flash...')
             subprocess.run([
                 'python3', '-m', 'esptool', '--chip', 'esp32',
@@ -245,6 +245,7 @@ class FlashApp:
             self.log(f'Hardware reset failed: {e}')
 
     def reset_ui(self):
+        self.progress_var.set('')
         self.log_area.config(state='normal')
         self.log_area.delete('1.0', 'end')
         self.log_area.config(state='disabled')
