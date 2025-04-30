@@ -1,3 +1,4 @@
+#this is a fun project. I like this one
 import tkinter as tk
 from tkinter import scrolledtext, messagebox
 import subprocess
